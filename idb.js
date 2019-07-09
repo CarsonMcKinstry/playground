@@ -17,6 +17,22 @@ global.IDBCursor = IDBCursor;
 global.IDBObjectStore = IDBObjectStore;
 global.IDBRequest = IDBRequest;
 
+async function getAll(cursor, limit = 2, count = 0, items = []) {
+  // this is also really interesting :)
+  if (!cursor.value || count >= limit) {
+    return {
+      items,
+      next: cursor._key
+    };
+  }
+
+  const nextItems = items.concat(cursor.value);
+
+  await cursor.continue();
+
+  return getAll(cursor, limit, count + 1, nextItems);
+}
+
 async function doDBStuff() {
   const db = await openDB("cursors", 1, {
     upgrade: async function(upgradeDB) {
@@ -31,23 +47,43 @@ async function doDBStuff() {
   try {
     await os.add({
       todo: "learn react",
-      id: Math.floor(new Date() / 1000)
+      id: 1
     });
     await os.add({
       todo: "learn graphql",
-      id: Math.floor(new Date() / 1000) + 1
+      id: 2
     });
     await os.add({
       todo: "learn melody",
-      id: Math.floor(new Date() / 1000) + 2
+      id: 3
     });
   } catch (e) {
     console.log(e.message);
   }
 
+  // const range = IDBKeyRange.bound(1, 2); // THis is the thing! thank god for types
+  // how should we get an upper bound?
+
   // figure out how cursors work
+  // need to figure out how to set the first cursor
   const cursor = await os.openCursor();
-  console.log(cursor);
+
+  // await cursor.continue();
+  // await cursor.continue();
+
+  // console.log(cursor);
+  // await cursor.advance();
+
+  const { items, next } = await getAll(cursor);
+
+  // console.log(items);
+
+  const newCursor = await os.openCursor(next);
+
+  const nextItems = await getAll(newCursor);
+
+  console.log(nextItems);
+
   await tx.done;
 }
 
