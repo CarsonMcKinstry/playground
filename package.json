@@ -7,6 +7,7 @@
   "dependencies": {
     "esm": "^3.2.25",
     "fake-indexeddb": "^2.1.1",
+    "faker": "^4.1.0",
     "graphql": "^14.4.2",
     "idb": "^4.0.3",
     "nexus": "^0.12.0-beta.6",
