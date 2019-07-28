@@ -39,7 +39,7 @@ const doThing = async () => {
   // const r = await client.query("SELECT * from users;");
   // console.log(r);
   let count = 0;
-  const usersArray = [...Array(faker.random.number(5000))]
+  const usersArray = [...Array(faker.random.number(10000))]
     .map(makeUser)
     .map(({ name, age }) =>
       client.query(
