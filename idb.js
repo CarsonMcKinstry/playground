@@ -1,3 +1,5 @@
+import faker from "faker";
+import uuid from "uuid/v4";
 import { openDB } from "idb";
 import indexedDB from "fake-indexeddb";
 import IDBKeyRange from "fake-indexeddb/lib/FDBKeyRange";
@@ -17,74 +19,100 @@ global.IDBCursor = IDBCursor;
 global.IDBObjectStore = IDBObjectStore;
 global.IDBRequest = IDBRequest;
 
-async function getAll(cursor, limit = 2, count = 0, items = []) {
-  // this is also really interesting :)
-  if (!cursor.value || count >= limit) {
-    return {
-      items,
-      next: cursor._key
-    };
-  }
+function insert(db) {
+  return async (table, data) => {
+    const tx = db.transaction(table, "readwrite");
+    const os = tx.objectStore(table);
 
-  const nextItems = items.concat(cursor.value);
+    // if (os.keyPath) {
+    //   data[os.keyPath] = uuid();
+    // }
+    const newItem = await os.add(data);
+    const result = await os.get(newItem);
 
-  await cursor.continue();
-
-  return getAll(cursor, limit, count + 1, nextItems);
+    return result;
+  };
 }
 
-async function doDBStuff() {
+// to remember if there is no keypath I need to provide autoincrement of true
+async function main() {
   const db = await openDB("cursors", 1, {
     upgrade: async function(upgradeDB) {
       const objectStore = upgradeDB.createObjectStore("todos", {
-        keyPath: "id"
+        keyPath: "id",
+        autoIncrement: true
       });
+      await objectStore.createIndex("todo", "todo");
     }
   });
 
-  const tx = db.transaction("todos", "readwrite");
-  const os = tx.objectStore("todos");
-  try {
-    await os.add({
-      todo: "learn react",
-      id: 1
-    });
-    await os.add({
-      todo: "learn graphql",
-      id: 2
-    });
-    await os.add({
-      todo: "learn melody",
-      id: 3
-    });
-  } catch (e) {
-    console.log(e.message);
-  }
+  const res = await insert(db)("todos", {
+    todo: "hello world"
+  });
 
-  // const range = IDBKeyRange.bound(1, 2); // THis is the thing! thank god for types
-  // how should we get an upper bound?
-
-  // figure out how cursors work
-  // need to figure out how to set the first cursor
-  const cursor = await os.openCursor();
-
-  // await cursor.continue();
-  // await cursor.continue();
-
-  // console.log(cursor);
-  // await cursor.advance();
-
-  const { items, next } = await getAll(cursor);
-
-  // console.log(items);
-
-  const newCursor = await os.openCursor(next);
-
-  const nextItems = await getAll(newCursor);
-
-  console.log(nextItems);
-
-  await tx.done;
+  console.log(res);
 }
 
-doDBStuff();
+main().then(console.log);
+
+// const id = i => i;
+
+// async function getAll(cursor, limit = 25, filter = id, result = []) {
+//   // this is also really interesting :)
+//   if (!cursor.value || limit <= 0) {
+//     const itemCount = await cursor.source.count();
+//     return {
+//       result,
+//       count: itemCount,
+//       next: cursor._key
+//     };
+//   }
+
+//   const nextItems = filter(cursor.value) ? result.concat(cursor.value) : result;
+
+//   await cursor.continue();
+
+//   return getAll(cursor, limit - 1, filter, nextItems);
+// }
+
+// const sieve = i => i.startsWith("a");
+
+// function objEqual(o1, o2) {
+//   return Object.keys(o1).every(key => o1[key] === o2[key]);
+// }
+
+// async function doDBStuff() {
+//   const db = await openDB("cursors", 1, {
+//     upgrade: async function(upgradeDB) {
+//       const objectStore = upgradeDB.createObjectStore("todos", {
+//         keyPath: "id"
+//       });
+//       await objectStore.createIndex("todo", "todo");
+//     }
+//   });
+
+//   const tx = db.transaction("todos", "readwrite");
+//   const os = tx.objectStore("todos");
+//   const index = os.index("todo");
+
+//   const todos = Array(100)
+//     .fill(undefined)
+//     .map(() => ({
+//       todo: faker.random.words(3),
+//       id: uuid()
+//     }));
+
+//   try {
+//     await Promise.all(todos.map(todo => os.add(todo)));
+//   } catch (e) {
+//     console.log(e);
+//   }
+
+//   const firstTodo = todos[0];
+
+//   const cursor = await index.openCursor(firstTodo.todo);
+
+//   await tx.done;
+// }
+
+// doDBStuff();
