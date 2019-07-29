@@ -41,14 +41,48 @@ async function doDBStuff() {
       todo: "learn melody",
       id: Math.floor(new Date() / 1000) + 2
     });
+    await os.add({
+      todo: "watch netflix",
+      id: Math.floor(new Date() / 1000) + 3
+    });
   } catch (e) {
     console.log(e.message);
   }
 
   // figure out how cursors work
+  // const cursor = await os.openCursor();
+  // // console.log(cursor);
+  // // console.log(cursor.value);
+  // // await cursor.continue().then(c => console.log(c.value));
+  // // await cursor.continue().then(c => console.log(c.value));
+  // // await cursor.continue().then(c => console.log(c.value));
+
+  function check(item) {
+    return item.todo.startsWith("watch");
+  }
+
+  async function accItems(cursor, items = []) {
+    if (!cursor) return items;
+
+    const item = cursor.value;
+
+    const nextItems = check(item) ? items.concat(cursor.value) : items;
+
+    const next = await cursor.continue();
+
+    return accItems(next, nextItems);
+  }
+
   const cursor = await os.openCursor();
-  console.log(cursor);
+
+  const items = await accItems(cursor);
+
+  console.log(items);
+
   await tx.done;
 }
 
-doDBStuff();
+console.time("thing");
+doDBStuff().then(() => {
+  console.timeEnd("thing");
+});
