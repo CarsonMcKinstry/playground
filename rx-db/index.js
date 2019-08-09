@@ -1,78 +1,78 @@
 import { interval, from } from "rxjs";
 import {
-  tap,
-  concatMap,
-  switchMap,
-  pluck,
-  map,
-  share,
-  reduce,
-  bufferCount
+    tap,
+    concatMap,
+    switchMap,
+    pluck,
+    map,
+    share,
+    reduce,
+    bufferCount
 } from "rxjs/operators";
 import { Pool } from "pg";
-const database = {
-  host: "localhost",
-  port: 5432,
-  user: "postgres",
-  password: "postgres",
-  database: "postgres"
-};
+import database from "./database.json";
+// const database = {
+//     host: "localhost",
+//     port: 5432,
+//     user: "postgres",
+//     password: "docker",
+//     database: "postgres"
+// };
 
 function createDBThing() {
-  const pool = new Pool(database);
-  const client$ = from(pool.connect());
+    const pool = new Pool(database.dev);
+    const client$ = from(pool.connect());
 
-  const count$ = client$.pipe(
-    switchMap(async client => {
-      const q = await client.query(`select count(*) from users;`);
+    const count$ = client$.pipe(
+        switchMap(async client => {
+            const q = await client.query(`select count(*) from users;`);
 
-      await client.release();
+            await client.release();
 
-      return q;
-    }),
-    pluck("rows"),
-    map(([{ count }]) => parseInt(count, 10)),
-    map(count => Math.ceil(count / 1000)),
-    share()
-  );
+            return q;
+        }),
+        pluck("rows"),
+        map(([{ count }]) => parseInt(count, 10)),
+        map(count => Math.ceil(count / 1000)),
+        share()
+    );
 
-  // const query$ = count$.pipe();
+    // const query$ = count$.pipe();
 
-  const query$ = count$.pipe(
-    switchMap(num => from([...Array(num)].map((_, i) => i))),
-    concatMap(async n => {
-      const query = `
+    const query$ = count$.pipe(
+        switchMap(num => from([...Array(num)].map((_, i) => i))),
+        concatMap(async n => {
+            const query = `
         SELECT * FROM users
           LIMIT 1000
           OFFSET ${n * 1000}
       `;
 
-      const client = await pool.connect();
+            const client = await pool.connect();
 
-      const q = await client.query(query);
+            const q = await client.query(query);
 
-      await client.release();
+            await client.release();
 
-      return from(q.rows);
-    }),
-    switchMap(o => o),
-    share()
-  );
+            return q.rows;
+        }),
+        switchMap(o => {
+            console.log(o);
+            return o;
+        }),
+        share()
+    );
 
-  query$.subscribe(
-    () => undefined,
-    () => undefined,
-    async () => {
-      await pool.end();
-    }
-  );
+    query$.subscribe(null, null, async () => {
+        await pool.end();
+    });
 
-  return query$;
+    return query$;
 }
 
 createDBThing()
-  .pipe(bufferCount(100))
-  .subscribe(console.log);
+    // .pipe(bufferCount(100))
+    .subscribe();
 
 // interval(0)
 //   .pipe(take(100))
