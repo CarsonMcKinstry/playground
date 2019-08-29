@@ -1,280 +1,150 @@
 // @ts-check
+import {
+  digits,
+  str,
+  choice,
+  sequenceOf,
+  between,
+  lazy,
+  Parser,
+  updateParserError,
+  updateParserState
+} from './parsers';
 
-const updateParserState = (state, index, result) => ({
-  ...state,
-  index,
-  result
+const Bit = new Parser(parserState => {
+  if (parserState.isError) {
+    return parserState;
+  }
+
+  const byteOffset = Math.floor(parserState.index / 8);
+
+  if (byteOffset >= parserState.target.byteLength) {
+    return updateParserError(parserState, `Bit: Unexpected end of input`);
+  }
+
+  const byte = parserState.target.getUint8(byteOffset);
+
+  const bitOffset = 7 - (parserState.index % 8);
+
+  const result = (byte & (1 << bitOffset)) >> bitOffset;
+
+  return updateParserState(parserState, parserState.index + 1, result);
 });
 
-const updateParserResult = (state, result) => ({
-  ...state,
-  result
-});
-
-const updateParserError = (state, message) => ({
-  ...state,
-  isError: true,
-  error: message
-});
-
-class Parser {
-  constructor(parserStateTransformerFn) {
-    this.parserStateTransformerFn = parserStateTransformerFn;
+const Zero = new Parser(parserState => {
+  if (parserState.isError) {
+    return parserState;
   }
 
-  run(targetString) {
-    const initalState = {
-      targetString,
-      index: 0,
-      result: null,
-      isError: false,
-      error: null
-    };
-    return this.parserStateTransformerFn(initalState);
+  const byteOffset = Math.floor(parserState.index / 8);
+
+  if (byteOffset >= parserState.target.byteLength) {
+    return updateParserError(parserState, `Zero: Unexpected end of input`);
   }
 
-  map(fn) {
-    return new Parser(parserState => {
-      const nextState = this.parserStateTransformerFn(parserState);
-      if (nextState.isError) return nextState;
-      return updateParserResult(nextState, fn(nextState.result));
-    });
-  }
+  const byte = parserState.target.getUint8(byteOffset);
 
-  chain(fn) {
-    return new Parser(parserState => {
-      const nextState = this.parserStateTransformerFn(parserState);
-      if (nextState.isError) return nextState;
+  const bitOffset = 7 - (parserState.index % 8);
 
-      const nextParser = fn(nextState.result);
+  const result = (byte & (1 << bitOffset)) >> bitOffset;
 
-      // return updateParserResult(nextState, fn(nextState.result));
-
-      return nextParser.parserStateTransformerFn(nextState);
-    });
-  }
-
-  mapError(fn) {
-    return new Parser(parserState => {
-      const nextState = this.parserStateTransformerFn(parserState);
-      if (!nextState.isError) return nextState;
-      return updateParserResult(
-        nextState,
-        fn(nextState.error, nextState.index)
-      );
-    });
-  }
-}
-
-const str = s =>
-  new Parser(parserState => {
-    const { targetString, index, isError } = parserState;
-
-    if (isError) return parserState;
-
-    const slicedTarget = targetString.slice(index);
-
-    if (slicedTarget.length === 0) {
-      return updateParserError(
-        parserState,
-        `str: Tried to match ${s}, but got unexepected end of input.`
-      );
-    }
-
-    if (slicedTarget.startsWith(s)) {
-      return updateParserState(parserState, index + s.length, s);
-    }
-
+  if (result !== 0) {
     return updateParserError(
       parserState,
-      `str: Tried to match ${s}, but got ${targetString.slice(
-        index,
-        index + 10
-      )}`
-    );
-  });
-
-const lettersRegex = /^[A-Za-z]+/;
-const letters = new Parser(parserState => {
-  const { targetString, index, isError } = parserState;
-
-  if (isError) return parserState;
-
-  const slicedTarget = targetString.slice(index);
-
-  if (slicedTarget.length === 0) {
-    return updateParserError(
-      parserState,
-      `letters: Got unexepected end of input.`
+      `Zero: expected a zero, but got one instead at index ${parserState.index}`
     );
   }
 
-  const regexMatch = slicedTarget.match(lettersRegex);
-
-  if (regexMatch) {
-    return updateParserState(
-      parserState,
-      index + regexMatch[0].length,
-      regexMatch[0]
-    );
-  }
-
-  return updateParserError(
-    parserState,
-    `str: Tried to match letters, at index ${index}`
-  );
+  return updateParserState(parserState, parserState.index + 1, result);
 });
 
-const digitsRegex = /^[0-9]+/;
-const digits = new Parser(parserState => {
-  const { targetString, index, isError } = parserState;
+const One = new Parser(parserState => {
+  if (parserState.isError) {
+    return parserState;
+  }
 
-  if (isError) return parserState;
+  const byteOffset = Math.floor(parserState.index / 8);
 
-  const slicedTarget = targetString.slice(index);
+  if (byteOffset >= parserState.target.byteLength) {
+    return updateParserError(parserState, `One: Unexpected end of input`);
+  }
 
-  if (slicedTarget.length === 0) {
+  const byte = parserState.target.getUint8(byteOffset);
+
+  const bitOffset = 7 - (parserState.index % 8);
+
+  const result = (byte & (1 << bitOffset)) >> bitOffset;
+
+  if (result !== 1) {
     return updateParserError(
       parserState,
-      `digits: Got unexepected end of input.`
+      `One: expected a one, but got zero instead at index ${parserState.index}`
     );
   }
 
-  const regexMatch = slicedTarget.match(digitsRegex);
-
-  if (regexMatch) {
-    return updateParserState(
-      parserState,
-      index + regexMatch[0].length,
-      regexMatch[0]
-    );
-  }
-
-  return updateParserError(
-    parserState,
-    `str: Tried to match digits, at index ${index}`
-  );
+  return updateParserState(parserState, parserState.index + 1, result);
 });
 
-const sequenceOf = (...parsers) =>
-  new Parser(parserState => {
-    if (parserState.isError) {
-      return parserState;
-    }
-    const results = [];
+const parser = sequenceOf(One, One, One, Zero, One, Zero, One, Zero);
 
-    let nextState = parserState;
+const data = new Uint8Array([234, 235]).buffer;
+const dataView = new DataView(data);
 
-    for (let p of parsers) {
-      nextState = p.parserStateTransformerFn(nextState);
-      results.push(nextState.result);
-    }
+const res = parser.run(dataView);
 
-    return updateParserResult(nextState, results);
-  });
+console.log(res);
 
-const choice = (...parsers) =>
-  new Parser(parserState => {
-    if (parserState.isError) {
-      return parserState;
-    }
+// const betweenBrackets = between(str('('), str(')'));
 
-    let nextState = parserState;
+// const numberParser = digits.map(n => ({
+//   type: 'number',
+//   value: Number(n)
+// }));
 
-    for (let p of parsers) {
-      nextState = p.parserStateTransformerFn(parserState);
-      if (!nextState.isError) {
-        return nextState;
-      }
-    }
+// const operatorParser = choice(str('+'), str('-'), str('*'), str('/'));
 
-    return updateParserError(
-      parserState,
-      `choice: Unable to match with any parser at index ${parserState.index}`
-    );
-  });
+// const expr = lazy(() => choice(numberParser, operationParser));
 
-const many = parser =>
-  new Parser(parserState => {
-    if (parserState.isError) {
-      return parserState;
-    }
-    let nextState = parserState;
-    const results = [];
-    let done = false;
-    while (!done) {
-      const testState = parser.parserStateTransformerFn(nextState);
+// const operationParser = betweenBrackets(
+//   sequenceOf(operatorParser, str(' '), expr, str(' '), expr)
+// ).map(results => ({
+//   type: 'operation',
+//   value: {
+//     operator: results[0],
+//     left: results[2],
+//     right: results[4]
+//   }
+// }));
 
-      if (!testState.isError) {
-        results.push(testState.result);
-        nextState = testState;
-      } else {
-        done = true;
-      }
-    }
+// const evaluate = node => {
+//   if (node.type === 'number') {
+//     return node.value;
+//   }
 
-    return updateParserResult(nextState, results);
-  });
+//   if (node.type === 'operation') {
+//     switch (node.value.operator) {
+//       case '+':
+//         return evaluate(node.value.left) + evaluate(node.value.right);
+//       case '-':
+//         return evaluate(node.value.left) - evaluate(node.value.right);
+//       case '*':
+//         return evaluate(node.value.left) * evaluate(node.value.right);
+//       case '/':
+//         return evaluate(node.value.left) / evaluate(node.value.right);
+//     }
+//   }
+// };
 
-const many1 = parser =>
-  new Parser(parserState => {
-    if (parserState.isError) {
-      return parserState;
-    }
-    let nextState = parserState;
-    const results = [];
-    let done = false;
-    while (!done) {
-      const testState = parser.parserStateTransformerFn(nextState);
+// const interpreter = program => {
+//   const parsedResult = expr.run(program);
 
-      if (!testState.isError) {
-        results.push(testState.result);
-        nextState = testState;
-      } else {
-        done = true;
-      }
-    }
+//   if (parsedResult.isError) {
+//     throw new Error('Invalid program');
+//   }
 
-    if (results.length < 1) {
-      return updateParserError(nextState, `many1: Unable to match any parser`);
-    }
+//   return evaluate(parsedResult.result);
+// };
 
-    return updateParserResult(nextState, results);
-  });
+// const complexString = '(+ (* 10 2) (- (/ 50 3) 2))';
 
-const between = (left, right) => content =>
-  sequenceOf(left, content, right).map(([, result]) => result);
-
-// const parser = sequenceOf(str('hello there!'), str('goodbye there!'));
-const betweenBrackers = between(str('('), str(')'));
-
-const stringParser = letters.map(result => ({ type: 'string', value: result }));
-const numberParser = digits.map(result => ({
-  type: 'number',
-  value: Number(result)
-}));
-
-const dicerollParser = sequenceOf(digits, str('d'), digits).map(([n, , s]) => ({
-  type: 'diceroll',
-  value: [Number(n), Number(s)]
-}));
-
-const parser = sequenceOf(letters, str(':'))
-  .map(results => results[0])
-  .chain(type => {
-    switch (type) {
-      case 'string': {
-        return stringParser;
-      }
-      case 'number': {
-        return numberParser;
-      }
-      case 'diceroll': {
-        return dicerollParser;
-      }
-    }
-  });
-
-console.log(parser.run('string:hello'));
-console.log(parser.run('number:42'));
-console.log(parser.run('diceroll:2d4'));
+// console.log(interpreter(complexString));
